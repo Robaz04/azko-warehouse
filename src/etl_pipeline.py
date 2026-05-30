@@ -258,6 +258,33 @@ def load_fact_sales(sales_engine, wh_engine, mkt_engine, dwh):
     log.info(f"  ✓ fact_sales: {len(fact)} baris")
 
 
+# ── Refresh Materialized Views ────────────────────────────────────────────────
+
+def refresh_materialized_views(dwh):
+    """Refresh semua Materialized Views setelah ETL selesai.
+    MV berfungsi sebagai pre-aggregated OLAP cubes untuk performa dashboard."""
+    log.info("Refreshing Materialized Views (OLAP cubes)...")
+
+    mv_list = [
+        "mv_monthly_sales",
+        "mv_category_region",
+        "mv_customer_segment",
+        "mv_store_performance",
+        "mv_promotion_effectiveness",
+    ]
+
+    with dwh.begin() as conn:
+        for mv_name in mv_list:
+            try:
+                conn.execute(text(f"REFRESH MATERIALIZED VIEW CONCURRENTLY {mv_name}"))
+                log.info(f"  ✓ {mv_name} refreshed")
+            except Exception as e:
+                # Jika MV belum dibuat, skip (non-fatal)
+                log.warning(f"  ⚠ {mv_name} skip: {e}")
+
+    log.info("Materialized Views refresh selesai.")
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
@@ -279,5 +306,8 @@ if __name__ == "__main__":
 
     # Load fact table (terakhir, karena bergantung pada semua dimensi)
     load_fact_sales(sales, warehouse, marketing, dwh)
+
+    # Refresh Materialized Views (pre-aggregated OLAP cubes)
+    refresh_materialized_views(dwh)
 
     log.info("═══ ETL Selesai! Data Warehouse siap. ═══")
